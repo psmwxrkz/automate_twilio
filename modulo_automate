@@ -1,0 +1,306 @@
+Declare PtrSafe Function FindWindow Lib "user32" Alias "FindWindowA" (ByVal lpClassName As String, ByVal lpWindowName As String) As Long
+Declare PtrSafe Function SetForegroundWindow Lib "user32" (ByVal hWnd As Long) As Long
+
+Function GetMostRecentFile(folderPath As String) As String
+    Dim fileSystem As Object
+    Dim folder As Object
+    Dim file As Object
+    Dim recentFile As String
+    Dim recentDate As Date
+    
+    Set fileSystem = CreateObject("Scripting.FileSystemObject")
+    Set folder = fileSystem.GetFolder(folderPath)
+    
+    recentDate = DateSerial(1900, 1, 1)
+    
+    For Each file In folder.Files
+        If file.DateLastModified > recentDate Then
+            recentDate = file.DateLastModified
+            recentFile = file.Path
+        End If
+    Next file
+    
+    GetMostRecentFile = recentFile
+End Function
+
+Sub TwilioAutomate()
+    Dim bot As New WebDriver
+    Dim url As String
+    Dim twilio As String
+    Dim username As String
+    Dim password As String
+    Dim downloadPath As String
+    Dim wb As Workbook
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim cell As Range
+    Dim targetWb As Workbook
+    Dim targetWs As Worksheet
+    Dim targetPath As String
+    Dim targetLastRow As Long
+    Dim downloadFolder As String
+    Dim recentFile As String
+    Dim hWnd As Long
+    
+    ' VARIAVEIS
+    username = "portaria_balanca"
+    password = "@Ecopatio2025"
+    targetPath = "G:\EMBARQUE\TWILIO\TWILIO-MODELO_MENSAGENS.xlsx"
+    url = "https://extranet.ecopatio.com.br/"
+    twilio = "https://twilio-portal.cglcloud.com/"
+    
+    ' Iniciar o navegador e acessar o site
+    bot.Start "chrome"
+    bot.Get url
+    bot.Wait 700
+    bot.Refresh
+    bot.Wait 3700
+    
+    ' Localizar e preencher o campo de usuário
+    bot.FindElementById("txtLogin").SendKeys username
+    bot.Wait 1000
+    
+    ' Localizar e preencher o campo de senha
+    bot.FindElementById("txtSenha").SendKeys password
+    bot.Wait 1000
+    
+    ' Localizar e clicar no botão de login
+    bot.FindElementById("btnEnviar").Click
+    bot.Wait 5000
+    
+    ' Localizar e clicar no botão Cms no Patio
+    bot.FindElementById("TreeView2t5").Click
+    bot.Wait 3000
+    
+    ' Clicar nos liberados sem pagamento
+    bot.FindElementById("rbLiberar_1").Click
+    bot.Wait 1500
+    
+    ' Clicar no campo produto
+    bot.FindElementById("rb_agrupar_0").Click
+    bot.Wait 2000
+
+On Error GoTo TratarErroUm
+' Clica na setinha de cima
+    bot.FindElementByXPath("(//input[@alt='Selecionar'])[1]").Click
+    bot.Wait 2000
+On Error GoTo 0
+    
+    ' Clicar no exportar
+    bot.FindElementById("btRelatorio").Click
+    bot.Wait 8000
+
+    ' Identificar a pasta de downloads padrão do usuário
+    downloadFolder = Environ("USERPROFILE") & "\Downloads\"
+    
+    ' Encontrar o arquivo mais recente na pasta de downloads
+    recentFile = GetMostRecentFile(downloadFolder)
+    
+    ' Abrir a planilha baixada
+    Set wb = Workbooks.Open(recentFile)
+    bot.Wait 1000
+    
+    Set ws = wb.Sheets(1)
+    bot.Wait 2000
+    
+    ' Remover os traços da coluna A (Placa)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    For Each cell In ws.Range("A2:A" & lastRow)
+        cell.Value = Replace(cell.Value, "-", "")
+    Next cell
+    bot.Wait 2000
+    
+    ' Transformar as células da coluna K (Qtd) em texto e adicionar "55" no início dos números
+    lastRow = ws.Cells(ws.Rows.Count, "K").End(xlUp).Row
+    For Each cell In ws.Range("K2:K" & lastRow)
+        If IsNumeric(cell.Value) Then
+            cell.NumberFormat = "@"
+            cell.Value = "55" & cell.Value
+        End If
+    Next cell
+    bot.Wait 2000
+    
+    ' Abrir a planilha de destino
+    Set targetWb = Workbooks.Open(targetPath)
+    bot.Wait 2000
+    
+    ' Deletar todos os dados a partir da linha 2, mantendo as bordas
+    Set targetWs = targetWb.Sheets(1)
+    lastRow = targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row
+    If lastRow > 1 Then
+        For Each cell In targetWs.Range("A2:Z" & lastRow)
+            cell.ClearContents
+        Next cell
+    End If
+    bot.Wait 2000
+    
+    ' Copiar dados da coluna A da planilha "downloadPath" para a coluna D da planilha "targetPath"
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    targetLastRow = targetWs.Cells(targetWs.Rows.Count, "D").End(xlUp).Row + 1
+    ws.Range("A2:A" & lastRow).Copy targetWs.Range("D" & targetLastRow)
+    
+    ' Copiar dados da coluna J da planilha "downloadPath" para a coluna B da planilha "targetPath"
+    lastRow = ws.Cells(ws.Rows.Count, "J").End(xlUp).Row
+    targetLastRow = targetWs.Cells(targetWs.Rows.Count, "B").End(xlUp).Row + 1
+    ws.Range("J2:J" & lastRow).Copy targetWs.Range("B" & targetLastRow)
+    
+    ' Copiar dados da coluna K da planilha "downloadPath" para a coluna A da planilha "targetPath"
+    lastRow = ws.Cells(ws.Rows.Count, "K").End(xlUp).Row
+    targetLastRow = targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row + 1
+    ws.Range("K2:K" & lastRow).Copy targetWs.Range("A" & targetLastRow)
+    bot.Wait 1000
+        
+    AppActivate ":: Ecopátio :: SisLog [Área de Clientes]"
+    bot.Wait 1000
+    
+TratarErroUm:
+On Error Resume Next
+
+On Error GoTo TratarErroDois
+    'Clica na segunda seta
+    bot.FindElementByXPath("(//input[@alt='Selecionar'])[2]").Click
+    bot.Wait 2000
+    On Error GoTo 0
+
+    ' Clicar no exportar########
+    bot.FindElementById("btRelatorio").Click
+    bot.Wait 8000
+
+    ' Identificar a pasta de downloads padrão do usuário
+    downloadFolder = Environ("USERPROFILE") & "\Downloads\"
+    
+    ' Encontrar o arquivo mais recente na pasta de downloads
+    recentFile = GetMostRecentFile(downloadFolder)
+    
+    ' Abrir a planilha baixada
+    Set wb = Workbooks.Open(recentFile)
+    bot.Wait 1000
+    
+    Set ws = wb.Sheets(1)
+    bot.Wait 2000
+    
+    ' Remover os traços da coluna A (Placa)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    For Each cell In ws.Range("A2:A" & lastRow)
+        cell.Value = Replace(cell.Value, "-", "")
+    Next cell
+    bot.Wait 2000
+    
+    ' Transformar as células da coluna K (Qtd) em texto e adicionar "55" no início dos números
+    lastRow = ws.Cells(ws.Rows.Count, "K").End(xlUp).Row
+    For Each cell In ws.Range("K2:K" & lastRow)
+        If IsNumeric(cell.Value) Then
+            cell.NumberFormat = "@"
+            cell.Value = "55" & cell.Value
+        End If
+    Next cell
+    bot.Wait 2000
+    
+    Set targetWb = Workbooks.Open(targetPath)
+    bot.Wait 2000
+    Set targetWs = targetWb.Sheets(1)
+    bot.Wait 2000
+    
+    ' Copiar dados da coluna A da planilha "downloadPath" para a coluna D da planilha "targetPath"
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    targetLastRow = targetWs.Cells(targetWs.Rows.Count, "D").End(xlUp).Row + 1
+    ws.Range("A2:A" & lastRow).Copy targetWs.Range("D" & targetLastRow)
+    
+    ' Copiar dados da coluna J da planilha "downloadPath" para a coluna B da planilha "targetPath"
+    lastRow = ws.Cells(ws.Rows.Count, "J").End(xlUp).Row
+    targetLastRow = targetWs.Cells(targetWs.Rows.Count, "B").End(xlUp).Row + 1
+    ws.Range("J2:J" & lastRow).Copy targetWs.Range("B" & targetLastRow)
+    
+    ' Copiar dados da coluna K da planilha "downloadPath" para a coluna A da planilha "targetPath"
+    lastRow = ws.Cells(ws.Rows.Count, "K").End(xlUp).Row
+    targetLastRow = targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row + 1
+    ws.Range("K2:K" & lastRow).Copy targetWs.Range("A" & targetLastRow)
+    
+    ' Adicionar o número "2" na coluna C
+    lastRow = targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row
+    For Each cell In targetWs.Range("C2:C" & lastRow)
+        cell.Value = 2
+    Next cell
+    bot.Wait 2500
+
+    ' Salvar a planilha de destino
+    targetWb.Save
+    bot.Wait 1500
+    
+    ' Fechar ambas as planilhas
+    wb.Close SaveChanges:=False
+    targetWb.Close SaveChanges:=True
+    bot.Wait 2000
+    
+    ' Abrir o site do Twilio
+    bot.Start "chrome"
+    bot.Get twilio
+    bot.Wait 1300
+    On Error Resume Next
+    AppActivate "Sign in to your account - Google Chrome"
+    
+    ' Pressionar Enter para selecionar o usuário
+    If Err.Number <> 0 Then
+        Err.Clear
+    End If
+    Application.SendKeys "~"
+    bot.Wait 7000
+    
+    ' Localizar e clicar no botão de Massive Message
+    bot.FindElementByXPath("(//a[normalize-space()='Massive Message'])[1]").Click
+    bot.Wait 3000
+    
+    ' Selecionar campo de seleção
+    bot.FindElementById("MassMessage_from").Click
+    bot.Wait 2000
+    
+    ' Selecionar TEXT
+    bot.FindElementByXPath("//div[contains(text(),'TEXT - CASC-TEG BR')]").Click
+    bot.Wait 2000
+    
+    ' Marcar Flow Notification
+    bot.FindElementById("MassMessage_isFlowNotification").Click
+    bot.Wait 2000
+
+   ' Localizar e clicar no campo de upload
+    bot.FindElementByXPath("(//div[@class='ant-upload-drag-container'])[1]").Click
+    bot.Wait 5000
+
+    ' Usar SendKeys para digitar o caminho do arquivo e pressionar Enter
+    Application.SendKeys targetPath & "{ENTER}"
+    bot.Wait 4600
+
+    ' Clicar em SEND
+    bot.FindElementByXPath("(//span[normalize-space()='Send'])[1]").Click
+    bot.Wait 9000
+    
+    ' Selecionar campo de seleção
+    bot.FindElementById("MassMessage_from").Click
+    bot.Wait 2000
+    
+    ' Selecionar VOZ
+    bot.FindElementByXPath("//div[contains(text(),'VOICE - CASC-TEG BR')]").Click
+    bot.Wait 2000
+    
+    ' Marcar Flow Notification
+    bot.FindElementById("MassMessage_isFlowNotification").Click
+    bot.Wait 2000
+
+   ' Localizar e clicar no campo de upload
+    bot.FindElementByXPath("(//div[@class='ant-upload-drag-container'])[1]").Click
+    bot.Wait 5000
+
+    ' Usar SendKeys para digitar o caminho do arquivo e pressionar Enter
+    Application.SendKeys targetPath & "{ENTER}"
+    bot.Wait 4600
+
+    ' Clicar em SEND
+    bot.FindElementByXPath("(//span[normalize-space()='Send'])[1]").Click
+    bot.Wait 9000
+
+
+TratarErroDois:
+On Error Resume Next
+End Sub
+
+
