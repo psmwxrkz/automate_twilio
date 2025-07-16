@@ -1,0 +1,54 @@
+Declare Sub Sleep Lib "kernel32" (ByVal dwMilliseconds As Long)
+
+Dim NextRun As Date
+Dim ScreenActiveTime As Date
+
+Sub ScheduleNextRun()
+    NextRun = Now + TimeValue("00:30:00") ' Define o próximo horário de execução
+    Application.OnTime NextRun, "RunMainMacro"
+    
+    ' Exibe o UserForm com o temporizador
+    Load frmTimer
+    frmTimer.Show vbModeless
+    UpdateTimer
+End Sub
+
+Sub RunMainMacro()
+    Call LogarNoSite ' Chama sua macro principal
+    
+    ' Chama a sub-rotina para agendar a próxima execução
+    ScheduleNextRun
+End Sub
+
+Sub StartLoop()
+    RunMainMacro
+    ScheduleScreenActive ' Inicia a rotina para manter a tela ativa
+End Sub
+
+Sub UpdateTimer()
+    Dim TimeRemaining As Double
+    TimeRemaining = NextRun - Now
+    
+    If TimeRemaining > 0 Then
+        frmTimer.lblTimeRemaining.Caption = "TWILIO será enviado novamente em: " & Format(TimeRemaining, "hh:mm:ss")
+        Application.OnTime Now + TimeValue("00:00:01"), "UpdateTimer"
+    Else
+        Unload frmTimer
+    End If
+End Sub
+
+Sub ScheduleScreenActive()
+    ScreenActiveTime = Now + TimeValue("00:05:00") ' Define o próximo horário de prevenção
+    Application.OnTime ScreenActiveTime, "PreventScreenOff"
+End Sub
+
+Sub PreventScreenOff()
+    Dim objShell As Object
+    Set objShell = CreateObject("WScript.Shell")
+    
+    objShell.SendKeys "{F15}" 'tecla pressionada
+    
+    ' Reagenda a próxima execução para prevenir o desligamento da tela
+    ScheduleScreenActive
+End Sub
+
