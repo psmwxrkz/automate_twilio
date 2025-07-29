@@ -14,7 +14,7 @@ Sub ScheduleNextRun()
 End Sub
 
 Sub RunMainMacro()
-    Call LogarNoSite ' Chama sua macro principal
+    Call Twiliow ' Chama sua macro principal
     
     ' Chama a sub-rotina para agendar a próxima execução
     ScheduleNextRun
