@@ -1,0 +1,230 @@
+Sub Twiliow()
+    Dim bot As New WebDriver
+    Dim url As String
+    Dim twilio As String
+    Dim username As String
+    Dim password As String
+    Dim wbNovo As Workbook
+    Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim cell As Range
+    Dim targetWb As Workbook
+    Dim targetWs As Worksheet
+    Dim targetPath As String
+    Dim targetLastRow As Long
+    Dim appExcel As Excel.Application
+    ' VARIAVEIS
+    username = "portaria_balanca"
+    password = "@Ecopatio2025"
+    targetPath = "G:\EMBARQUE\TWILIO\TWILIO-MODELO_MENSAGENS.xlsx"
+    url = "https://extranet.ecopatio.com.br/"
+    twilio = "https://twilio-portal.cglcloud.com/"
+    ' Iniciar o navegador e acessar o site
+    bot.Start "chrome"
+    bot.Wait 700
+    bot.Get url
+    bot.Wait 800
+    bot.Refresh
+    bot.Wait 4000
+    ' Preencher login
+    bot.FindElementById("txtLogin").SendKeys username
+    bot.Wait 1000
+    bot.FindElementById("txtSenha").SendKeys password
+    bot.Wait 1000
+    bot.FindElementById("btnEnviar").Click
+    bot.Wait 5000
+    ' Navegar até a tela desejada
+    bot.FindElementById("TreeView2t5").Click
+    bot.Wait 3000
+    bot.FindElementById("rbLiberar_1").Click
+    bot.Wait 1500
+    bot.FindElementById("rb_tipo_2").Click
+    bot.Wait 2000
+    bot.FindElementById("rb_agrupar_0").Click
+    bot.Wait 2000
+    On Error GoTo FimCode
+    bot.FindElementByXPath("(//input[@alt='Selecionar'])[1]").Click
+    bot.Wait 2000
+    On Error GoTo 0
+' === CRIAR NOVO EXCEL EM BRANCO PARA COLAR A TABELA ===
+Set appExcel = New Excel.Application
+appExcel.Visible = True
+Set wbNovo = appExcel.Workbooks.Add
+Set ws = wbNovo.Sheets(1)
+' === FORMATAR TODAS AS CÉLULAS COMO TEXTO ANTES DE COLAR ===
+ws.Cells.NumberFormat = "@"
+' === COPIAR A TABELA DA PRIMEIRA SETINHA DA PÁGINA PARA O EXCEL ===
+Dim tabela As WebElement
+Dim linhas As WebElements, linha As WebElement
+Dim colunas As WebElements, coluna As WebElement
+Dim i As Long, j As Long
+Set tabela = bot.FindElementById("gvw_c2")
+Set linhas = tabela.FindElementsByTag("tr")
+i = 1
+For Each linha In linhas
+    Set colunas = linha.FindElementsByTag("td")
+    If colunas.Count = 0 Then Set colunas = linha.FindElementsByTag("th")
+    j = 1
+    For Each coluna In colunas
+        ws.Cells(i, j).Value = coluna.Text
+        j = j + 1
+    Next coluna
+    i = i + 1
+Next linha
+' === EXCLUIR A COLUNA A ===
+ws.Columns("A").Delete    ' Remover os traços da coluna A (Placa)
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    For Each cell In ws.Range("A2:A" & lastRow)
+        cell.Value = Replace(cell.Value, "-", "")
+    Next cell
+    bot.Wait 2000
+' === ADICIONAR "55" NA COLUNA K DA PLANILHA wbNovo ===
+lastRow = ws.Cells(ws.Rows.Count, "O").End(xlUp).Row
+For Each cell In ws.Range("O2:O" & lastRow)
+    If IsNumeric(cell.Value) Then
+        cell.NumberFormat = "@"
+        cell.Value = "55" & cell.Value
+    End If
+Next cell
+    ' Abrir a planilha de destino
+    Set targetWb = Workbooks.Open(targetPath)
+    Set targetWs = targetWb.Sheets(1)
+    bot.Wait 2000
+    ' Limpar dados da planilha de destino (exceto linha 1)
+    lastRow = targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row
+    If lastRow > 1 Then
+        targetWs.Range("A2:Z" & lastRow).ClearContents
+    End If
+    bot.Wait 2000
+' === COLAR OS DADOS DO wbNovo PARA A targetWs DIRETAMENTE ===
+Dim iRow As Long
+lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+For iRow = 2 To lastRow
+    ' Coluna D recebe A
+    targetWs.Cells(iRow, "D").Value = ws.Cells(iRow, "A").Value
+    ' Coluna B recebe J
+    targetWs.Cells(iRow, "B").Value = ws.Cells(iRow, "K").Value
+    ' Coluna A recebe K
+    targetWs.Cells(iRow, "A").Value = ws.Cells(iRow, "O").Value
+    ' Coluna C recebe 2
+    targetWs.Cells(iRow, "C").Value = 2
+Next iRow
+ 
+    ' === SEGUNDA SETINHA ===
+    AppActivate ":: Ecopátio :: SisLog [Área de Clientes]"
+    On Error GoTo PulaSegundaSeta
+    bot.FindElementByXPath("(//input[@alt='Selecionar'])[2]").Click
+    bot.Wait 2000
+    On Error GoTo 0
+ 
+    ' === LIMPAR PLANILHA wbNovo ===
+    ws.Cells.ClearContents
+    bot.Wait 1000
+ 
+    ' === COPIAR NOVAMENTE A TABELA PARA O MESMO ws ===
+    Set tabela = bot.FindElementById("gvw_c2")
+    Set linhas = tabela.FindElementsByTag("tr")
+    i = 1
+    For Each linha In linhas
+        Set colunas = linha.FindElementsByTag("td")
+        If colunas.Count = 0 Then Set colunas = linha.FindElementsByTag("th")
+        j = 1
+        For Each coluna In colunas
+            ws.Cells(i, j).Value = coluna.Text
+            j = j + 1
+        Next coluna
+        i = i + 1
+    Next linha
+ 
+    ' === EXCLUIR A COLUNA A NOVAMENTE ===
+    ws.Columns("A").Delete
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    For Each cell In ws.Range("A2:A" & lastRow)
+        cell.Value = Replace(cell.Value, "-", "")
+    Next cell
+ 
+    ' === ADICIONAR "55" NA COLUNA O NOVAMENTE ===
+    lastRow = ws.Cells(ws.Rows.Count, "O").End(xlUp).Row
+    For Each cell In ws.Range("O2:O" & lastRow)
+        If IsNumeric(cell.Value) Then
+            cell.NumberFormat = "@"
+            cell.Value = "55" & cell.Value
+        End If
+    Next cell
+ 
+    ' === COLAR NOVOS DADOS ABAIXO DOS ANTIGOS NA targetWs ===
+    targetLastRow = targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row + 1
+    For iRow = 2 To lastRow
+        ' Coluna D recebe A
+        targetWs.Cells(targetLastRow, "D").Value = ws.Cells(iRow, "A").Value
+        ' Coluna B recebe J
+        targetWs.Cells(targetLastRow, "B").Value = ws.Cells(iRow, "K").Value
+        ' Coluna A recebe O
+        targetWs.Cells(targetLastRow, "A").Value = ws.Cells(iRow, "O").Value
+        ' Coluna C recebe 2
+        targetWs.Cells(targetLastRow, "C").Value = 2
+        targetLastRow = targetLastRow + 1
+    Next iRow
+ 
+    bot.Wait 2000
+ 
+    ' Adicionar número 2 na coluna C
+    lastRow = targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row
+    For Each cell In targetWs.Range("C2:C" & lastRow)
+        cell.Value = 2
+    Next cell
+ 
+    bot.Wait 2500
+PulaSegundaSeta:
+    ' Salvar e fechar
+    targetWb.Save
+    targetWb.Close SaveChanges:=True
+ 
+     ' === FECHAR O wbNovo APÓS USO ===
+    wbNovo.Close SaveChanges:=False
+    Set wbNovo = Nothing
+    Set ws = Nothing
+    appExcel.Quit
+    Set appExcel = Nothing
+ 
+    ' === PARTE TWILIO ===
+    bot.Start "chrome"
+    bot.Get twilio
+    bot.Wait 12000
+    On Error Resume Next
+    Application.SendKeys "~"
+    bot.Wait 12000
+    On Error GoTo 0
+    ' Massive Message TEXT
+    bot.FindElementByXPath("(//a[normalize-space()='Massive Message'])[1]").Click
+    bot.Wait 3000
+    bot.FindElementById("MassMessage_from").Click
+    bot.Wait 2000
+    bot.FindElementByXPath("//div[contains(text(),'TEXT - CASC-TEG BR')]").Click
+    bot.Wait 2000
+    bot.FindElementById("MassMessage_isFlowNotification").Click
+    bot.Wait 2000
+    bot.FindElementByXPath("(//div[@class='ant-upload-drag-container'])[1]").Click
+    bot.Wait 5000
+    Application.SendKeys targetPath & "{ENTER}"
+    bot.Wait 4600
+    bot.FindElementByXPath("(//span[normalize-space()='Send'])[1]").Click
+    bot.Wait 9000
+    ' Massive Message VOICE
+    bot.FindElementById("MassMessage_from").Click
+    bot.Wait 2000
+    bot.FindElementByXPath("//div[contains(text(),'VOICE - CASC-TEG BR')]").Click
+    bot.Wait 2000
+    bot.FindElementById("MassMessage_isFlowNotification").Click
+    bot.Wait 2000
+    bot.FindElementByXPath("(//div[@class='ant-upload-drag-container'])[1]").Click
+    bot.Wait 5000
+    Application.SendKeys targetPath & "{ENTER}"
+    bot.Wait 4600
+    bot.FindElementByXPath("(//span[normalize-space()='Send'])[1]").Click
+    bot.Wait 9000
+    bot.Quit
+    bot.Wait 500
+FimCode:
+bot.Quit
+End Sub
