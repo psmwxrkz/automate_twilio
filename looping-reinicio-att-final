@@ -1,0 +1,73 @@
+Dim NextRun As Date
+Dim ScreenActiveTime As Date
+Dim bot As WebDriver '''''''' GLOBAL INCLUSIVE PARA A SUB TWILIOW!!!!!!!!!!! ''''
+
+Sub StartLoopi()
+    Set bot = New WebDriver
+    bot.Start "chrome"
+    bot.Get "https://extranet.ecopatio.com.br/"
+    bot.Wait 4000
+
+    MsgBox "Por favor, faça login manualmente no Ecopátio e clique OK para iniciar o ciclo automático.", vbInformation
+
+    ' Verifica se login foi feito
+    If bot.FindElementsById("TreeView2t5").Count = 0 Then
+        MsgBox "Login não detectado. A macro será encerrada.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Executa imediatamente a macro principal
+    Twiliow
+
+    ' Só agora inicia o temporizador para o próximo ciclo
+    ScheduleNextRun
+
+    ' Inicia a rotina para manter a tela ativa
+    ScheduleScreenActive
+End Sub
+
+Sub RunMainMacro()
+    ' Verifica se pelo menos um dos elementos está presente na página do Ecopátio
+    If bot.FindElementsById("TreeView2t5").Count = 0 And bot.FindElementsById("rbLiberar_1").Count = 0 Then
+        MsgBox "Login não detectado ou página incorreta. A macro será pausada até novo login manual.", vbExclamation
+        ScheduleNextRun
+        Exit Sub
+    End If
+
+    Twiliow
+    ScheduleNextRun
+End Sub
+
+Sub ScheduleNextRun()
+    NextRun = Now + TimeValue("00:00:05") 'AQUI ALTERA O TEMPO.
+    Application.OnTime NextRun, "RunMainMacro"
+
+    Load frmTimer
+    frmTimer.Show vbModeless
+    UpdateTimer
+End Sub
+
+Sub UpdateTimer()
+    Dim TimeRemaining As Double
+    TimeRemaining = NextRun - Now
+
+    If TimeRemaining > 0 Then
+        frmTimer.lblTimeRemaining.Caption = "TWILIO será enviado novamente em: " & Format(TimeRemaining, "hh:mm:ss")
+        Application.OnTime Now + TimeValue("00:00:01"), "UpdateTimer"
+    Else
+        Unload frmTimer
+    End If
+End Sub
+
+Sub ScheduleScreenActive()
+    ScreenActiveTime = Now + TimeValue("00:05:00")
+    Application.OnTime ScreenActiveTime, "PreventScreenOff"
+End Sub
+
+Sub PreventScreenOff()
+    Dim objShell As Object
+    Set objShell = CreateObject("WScript.Shell")
+    objShell.SendKeys "{F15}"
+    ScheduleScreenActive
+End Sub
+
