@@ -1,0 +1,260 @@
+Dim NextRun As Date
+Dim ScreenActiveTime As Date
+Dim bot As WebDriver ' Global para manter entre ciclos
+
+Sub StartLoopi()
+    Set bot = New WebDriver
+    bot.Start "chrome"
+    bot.Get "https://extranet.ecopatio.com.br/"
+    bot.Wait 4000
+
+    MsgBox "Por favor, faça login manualmente no Ecopátio e clique OK para iniciar o ciclo automático.", vbInformation
+
+    ' Verifica se login foi feito
+    If bot.FindElementsById("TreeView2t5").Count = 0 Then
+        MsgBox "Login não detectado. A macro será encerrada.", vbExclamation
+        Exit Sub
+    End If
+
+    ' Executa imediatamente a macro principal
+    Twiliow
+
+    ' Só agora inicia o temporizador para o próximo ciclo
+    ScheduleNextRun
+
+    ' Inicia a rotina para manter a tela ativa
+    ScheduleScreenActive
+End Sub
+
+Sub RunMainMacro()
+    ' Verifica se pelo menos um dos elementos está presente na página do Ecopátio
+    If bot.FindElementsById("TreeView2t5").Count = 0 And bot.FindElementsById("rbLiberar_1").Count = 0 Then
+        MsgBox "Login não detectado ou página incorreta. A macro será pausada até novo login manual.", vbExclamation
+        ScheduleNextRun
+        Exit Sub
+    End If
+
+    Twiliow
+    ScheduleNextRun
+End Sub
+
+Sub ScheduleNextRun()
+    NextRun = Now + TimeValue("00:00:05") 'AQUI ALTERA O TEMPO.
+    Application.OnTime NextRun, "RunMainMacro"
+
+    Load frmTimer
+    frmTimer.Show vbModeless
+    UpdateTimer
+End Sub
+
+Sub UpdateTimer()
+    Dim TimeRemaining As Double
+    TimeRemaining = NextRun - Now
+
+    If TimeRemaining > 0 Then
+        frmTimer.lblTimeRemaining.Caption = "TWILIO será enviado novamente em: " & Format(TimeRemaining, "hh:mm:ss")
+        Application.OnTime Now + TimeValue("00:00:01"), "UpdateTimer"
+    Else
+        Unload frmTimer
+    End If
+End Sub
+
+Sub ScheduleScreenActive()
+    ScreenActiveTime = Now + TimeValue("00:05:00")
+    Application.OnTime ScreenActiveTime, "PreventScreenOff"
+End Sub
+
+Sub PreventScreenOff()
+    Dim objShell As Object
+    Set objShell = CreateObject("WScript.Shell")
+    objShell.SendKeys "{F15}"
+    ScheduleScreenActive
+End Sub
+
+Sub Twiliow()
+
+    Dim targetPath As String
+    Dim wbNovo As Workbook, ws As Worksheet
+    Dim targetWb As Workbook, targetWs As Worksheet
+    Dim lastRow As Long, targetLastRow As Long, iRow As Long
+    Dim cell As Range
+    Dim appExcel As Excel.Application
+
+    targetPath = "G:\EMBARQUE\TWILIO\TWILIO-MODELO_MENSAGENS.xlsx"
+
+    ' Navegação e coleta de dados
+    On Error Resume Next
+    bot.Wait 2000
+    bot.FindElementByXPath("(//label[normalize-space()='Aguardando liberação'])[1]").Click
+    bot.Wait 3000
+    bot.FindElementById("TreeView2t5").Click
+    bot.Wait 3000
+    bot.FindElementById("rbLiberar_1").Click
+    bot.Wait 3000
+    bot.FindElementById("rb_tipo_2").Click
+    bot.Wait 2000
+    bot.FindElementById("rb_agrupar_0").Click
+    bot.Wait 2000
+    On Error GoTo 0
+
+    On Error GoTo FimCode
+    bot.FindElementByXPath("(//input[@alt='Selecionar'])[1]").Click
+    bot.Wait 2000
+    On Error GoTo 0
+
+    Set appExcel = New Excel.Application
+    appExcel.Visible = True
+    Set wbNovo = appExcel.Workbooks.Add
+    Set ws = wbNovo.Sheets(1)
+    ws.Cells.NumberFormat = "@"
+
+    Dim tabela As WebElement, linhas As WebElements, linha As WebElement
+    Dim colunas As WebElements, coluna As WebElement
+    Dim i As Long, j As Long
+
+    Set tabela = bot.FindElementById("gvw_c2")
+    Set linhas = tabela.FindElementsByTag("tr")
+    i = 1
+    For Each linha In linhas
+        Set colunas = linha.FindElementsByTag("td")
+        If colunas.Count = 0 Then Set colunas = linha.FindElementsByTag("th")
+        j = 1
+        For Each coluna In colunas
+            ws.Cells(i, j).Value = coluna.Text
+            j = j + 1
+        Next coluna
+        i = i + 1
+    Next linha
+
+    ws.Columns("A").Delete
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    For Each cell In ws.Range("A2:A" & lastRow)
+        cell.Value = Replace(cell.Value, "-", "")
+    Next cell
+
+    lastRow = ws.Cells(ws.Rows.Count, "O").End(xlUp).Row
+    For Each cell In ws.Range("O2:O" & lastRow)
+        If IsNumeric(cell.Value) Then
+            cell.NumberFormat = "@"
+            cell.Value = "55" & cell.Value
+        End If
+    Next cell
+
+    Set targetWb = Workbooks.Open(targetPath)
+    Set targetWs = targetWb.Sheets(1)
+
+    targetWs.Range("A2:Z" & targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row).ClearContents
+
+    For iRow = 2 To lastRow
+        targetWs.Cells(iRow, "D").Value = ws.Cells(iRow, "A").Value
+        targetWs.Cells(iRow, "B").Value = ws.Cells(iRow, "K").Value
+        targetWs.Cells(iRow, "A").Value = ws.Cells(iRow, "O").Value
+        targetWs.Cells(iRow, "C").Value = 2
+    Next iRow
+
+    AppActivate ":: Ecopátio :: SisLog [Área de Clientes]"
+    On Error GoTo PulaSegundaSeta
+    bot.FindElementByXPath("(//input[@alt='Selecionar'])[2]").Click
+    bot.Wait 2000
+    On Error GoTo 0
+
+    ws.Cells.ClearContents
+    Set tabela = bot.FindElementById("gvw_c2")
+    Set linhas = tabela.FindElementsByTag("tr")
+    i = 1
+    For Each linha In linhas
+        Set colunas = linha.FindElementsByTag("td")
+        If colunas.Count = 0 Then Set colunas = linha.FindElementsByTag("th")
+        j = 1
+        For Each coluna In colunas
+            ws.Cells(i, j).Value = coluna.Text
+            j = j + 1
+        Next coluna
+        i = i + 1
+    Next linha
+
+    ws.Columns("A").Delete
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    For Each cell In ws.Range("A2:A" & lastRow)
+        cell.Value = Replace(cell.Value, "-", "")
+    Next cell
+
+    lastRow = ws.Cells(ws.Rows.Count, "O").End(xlUp).Row
+    For Each cell In ws.Range("O2:O" & lastRow)
+        If IsNumeric(cell.Value) Then
+            cell.NumberFormat = "@"
+            cell.Value = "55" & cell.Value
+        End If
+    Next cell
+
+    targetLastRow = targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row + 1
+    For iRow = 2 To lastRow
+        targetWs.Cells(targetLastRow, "D").Value = ws.Cells(iRow, "A").Value
+        targetWs.Cells(targetLastRow, "B").Value = ws.Cells(iRow, "K").Value
+        targetWs.Cells(targetLastRow, "A").Value = ws.Cells(iRow, "O").Value
+        targetWs.Cells(targetLastRow, "C").Value = 2
+        targetLastRow = targetLastRow + 1
+    Next iRow
+
+    bot.Wait 2000
+
+    lastRow = targetWs.Cells(targetWs.Rows.Count, "A").End(xlUp).Row
+    For Each cell In targetWs.Range("C2:C" & lastRow)
+        cell.Value = 2
+    Next cell
+
+    bot.Wait 2500
+
+PulaSegundaSeta:
+    targetWb.Save
+    targetWb.Close SaveChanges:=True
+    wbNovo.Close SaveChanges:=False
+    Set wbNovo = Nothing
+    Set ws = Nothing
+    appExcel.Quit
+    Set appExcel = Nothing
+
+    ' === ENVIO TWILIO EM NOVA INSTÂNCIA ===
+    Dim twilioBot As New WebDriver
+    twilioBot.Start "chrome"
+    twilioBot.Get "https://twilio-portal.cglcloud.com/"
+    twilioBot.Wait 12000
+    Application.SendKeys "~"
+    twilioBot.Wait 12000
+    twilioBot.FindElementByXPath("//a[normalize-space()='Massive Message']").Click
+    twilioBot.Wait 3000
+
+    twilioBot.FindElementById("MassMessage_from").Click
+    twilioBot.Wait 2000
+    twilioBot.FindElementByXPath("//div[contains(text(),'TEXT - CASC-TEG BR')]").Click
+    twilioBot.Wait 2000
+    twilioBot.FindElementById("MassMessage_isFlowNotification").Click
+    twilioBot.Wait 2000
+    twilioBot.FindElementByXPath("(//div[@class='ant-upload-drag-container'])[1]").Click
+    twilioBot.Wait 5000
+    Application.SendKeys targetPath & "{ENTER}"
+    twilioBot.Wait 4600
+    twilioBot.FindElementByXPath("(//span[normalize-space()='Send'])[1]").Click
+    twilioBot.Wait 10000
+
+    twilioBot.FindElementById("MassMessage_from").Click
+    twilioBot.Wait 2000
+    twilioBot.FindElementByXPath("//div[contains(text(),'VOICE - CASC-TEG BR')]").Click
+    twilioBot.Wait 2000
+    twilioBot.FindElementById("MassMessage_isFlowNotification").Click
+    twilioBot.Wait 2000
+    twilioBot.FindElementByXPath("(//div[@class='ant-upload-drag-container'])[1]").Click
+    twilioBot.Wait 5000
+    Application.SendKeys targetPath & "{ENTER}"
+    twilioBot.Wait 4600
+    twilioBot.FindElementByXPath("(//span[normalize-space()='Send'])[1]").Click
+    twilioBot.Wait 10000
+
+    ' Fecha o navegador do Twilio
+    twilioBot.Quit
+    bot.Wait 3500
+
+FimCode:
+End Sub
+
+
